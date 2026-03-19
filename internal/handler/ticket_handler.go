@@ -21,8 +21,9 @@ func NewTicketHandler(s *service.TicketService) *TicketHandler {
 func (h *TicketHandler) TakeTicket(w http.ResponseWriter, r *http.Request) {
 
 	type Request struct {
-		QueueID int `json:"queue_id"`
-	}
+	QueueID int `json:"queue_id"`
+	UserID  int `json:"user_id"`
+}
 
 	var req Request
 

@@ -10,11 +10,13 @@ type ServicePointRepository interface {
 type QueueRepository interface {
 	Create(models.Queue) models.Queue
 	GetAll() []models.Queue
+	GetByServicePoint(int) []models.Queue
 }
 
 type TicketRepository interface {
-	Create(int) models.Ticket
+	Create(int, int) models.Ticket
 	GetAll() []models.Ticket
 	CallNext() *models.Ticket
 	Complete(int) *models.Ticket
+	GetPosition(int) int
 }

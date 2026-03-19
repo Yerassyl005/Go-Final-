@@ -10,8 +10,8 @@ func NewTicketService(r TicketRepository) *TicketService {
 	return &TicketService{repo: r}
 }
 
-func (s *TicketService) Create(queueID int) models.Ticket {
-	return s.repo.Create(queueID)
+func (s *TicketService) Create(queueID int, userID int) models.Ticket {
+	return s.repo.Create(queueID, userID)
 }
 
 func (s *TicketService) GetAll() []models.Ticket {

@@ -66,3 +66,4 @@ func (r *TicketRepository) Complete(id int) *models.Ticket {
 
 	return nil
 }
+

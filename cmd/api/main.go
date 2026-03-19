@@ -6,6 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"smartqueue/internal/database"
 	"smartqueue/internal/handler"
 	"smartqueue/internal/repository"
 	"smartqueue/internal/service"
@@ -13,32 +14,41 @@ import (
 
 func main() {
 
+	db := database.ConnectDB()
+
 	router := mux.NewRouter()
 
-	servicePointRepo := repository.NewServicePointRepository()
-	queueRepo := repository.NewQueueRepository()
-	ticketRepo := repository.NewTicketRepository()
+	// REPOSITORIES
+	servicePointRepo := repository.NewServicePointPostgresRepository(db)
+	queueRepo := repository.NewQueuePostgresRepository(db)
+	ticketRepo := repository.NewTicketPostgresRepository(db)
 
+	// SERVICES
 	servicePointService := service.NewServicePointService(servicePointRepo)
 	queueService := service.NewQueueService(queueRepo)
 	ticketService := service.NewTicketService(ticketRepo)
 
+	// HANDLERS
 	servicePointHandler := handler.NewServicePointHandler(servicePointService)
 	queueHandler := handler.NewQueueHandler(queueService)
 	ticketHandler := handler.NewTicketHandler(ticketService)
 
+	// ROUTES
 	router.HandleFunc("/servicepoints", servicePointHandler.Create).Methods("POST")
 	router.HandleFunc("/servicepoints", servicePointHandler.GetAll).Methods("GET")
 
 	router.HandleFunc("/queues", queueHandler.Create).Methods("POST")
 	router.HandleFunc("/queues", queueHandler.GetAll).Methods("GET")
 
+	router.HandleFunc("/servicepoints/{id}/queues", queueHandler.GetByServicePoint).Methods("GET")
+
 	router.HandleFunc("/tickets", ticketHandler.TakeTicket).Methods("POST")
 	router.HandleFunc("/tickets", ticketHandler.GetTickets).Methods("GET")
 
 	router.HandleFunc("/tickets/call", ticketHandler.CallNext).Methods("POST")
-
 	router.HandleFunc("/tickets/{id}/complete", ticketHandler.CompleteTicket).Methods("POST")
+
+	router.HandleFunc("/tickets/{id}/position", ticketHandler.GetPosition).Methods("GET")
 
 	log.Println("Server running on port 8080")
 

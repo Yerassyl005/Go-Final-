@@ -3,7 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
+	"github.com/gorilla/mux"
 	"smartqueue/internal/models"
 	"smartqueue/internal/service"
 )
@@ -34,6 +36,17 @@ func (h *QueueHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *QueueHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	queues := h.service.GetAll()
+
+	json.NewEncoder(w).Encode(queues)
+}
+
+func (h *QueueHandler) GetByServicePoint(w http.ResponseWriter, r *http.Request) {
+
+	params := mux.Vars(r)
+
+	id, _ := strconv.Atoi(params["id"])
+
+	queues := h.service.GetByServicePoint(id)
 
 	json.NewEncoder(w).Encode(queues)
 }

@@ -17,3 +17,7 @@ func (s *QueueService) Create(q models.Queue) models.Queue {
 func (s *QueueService) GetAll() []models.Queue {
 	return s.repo.GetAll()
 }
+
+func (s *QueueService) GetByServicePoint(servicePointID int) []models.Queue {
+	return s.repo.GetByServicePoint(servicePointID)
+}
