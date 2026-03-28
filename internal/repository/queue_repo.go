@@ -15,7 +15,6 @@ func NewQueueRepository() *QueueRepository {
 }
 
 func (r *QueueRepository) Create(q models.Queue) models.Queue {
-
 	q.ID = r.nextID
 	r.nextID++
 
@@ -26,4 +25,16 @@ func (r *QueueRepository) Create(q models.Queue) models.Queue {
 
 func (r *QueueRepository) GetAll() []models.Queue {
 	return r.queues
+}
+
+func (r *QueueRepository) GetByServicePoint(servicePointID int) []models.Queue {
+	var result []models.Queue
+
+	for _, q := range r.queues {
+		if q.ServicePointID == servicePointID {
+			result = append(result, q)
+		}
+	}
+
+	return result
 }

@@ -25,3 +25,9 @@ func (s *TicketService) CallNext() *models.Ticket {
 func (s *TicketService) Complete(id int) *models.Ticket {
 	return s.repo.Complete(id)
 }
+func (s *TicketService) GetPosition(id int) int {
+	return s.repo.GetPosition(id)
+}
+func (s *TicketService) Skip(id int) *models.Ticket {
+	return s.repo.Skip(id)
+}

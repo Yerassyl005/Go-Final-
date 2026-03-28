@@ -19,4 +19,5 @@ type TicketRepository interface {
 	CallNext() *models.Ticket
 	Complete(int) *models.Ticket
 	GetPosition(int) int
+	Skip(int) *models.Ticket
 }

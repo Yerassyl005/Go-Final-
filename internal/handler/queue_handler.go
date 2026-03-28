@@ -50,3 +50,46 @@ func (h *QueueHandler) GetByServicePoint(w http.ResponseWriter, r *http.Request)
 
 	json.NewEncoder(w).Encode(queues)
 }
+func (h *QueueHandler) GetDisplay(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	params := mux.Vars(r)
+	id, _ := strconv.Atoi(params["id"])
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"queue_id":   id,
+		"queue_name": "Documents",
+		"current_ticket": map[string]interface{}{
+			"id":            5,
+			"ticket_number": "A-005",
+			"status":        "called",
+		},
+		"waiting_tickets": []map[string]interface{}{
+			{
+				"id":            6,
+				"ticket_number": "A-006",
+				"status":        "waiting",
+			},
+			{
+				"id":            7,
+				"ticket_number": "A-007",
+				"status":        "waiting",
+			},
+		},
+		"completed_count": 4,
+	})
+}
+func (h *QueueHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	params := mux.Vars(r)
+	id, _ := strconv.Atoi(params["id"])
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"queue_id":          id,
+		"total_tickets":     12,
+		"waiting_tickets":   4,
+		"called_tickets":    1,
+		"completed_tickets": 7,
+	})
+}
