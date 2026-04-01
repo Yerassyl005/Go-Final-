@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"fmt"
 	"smartqueue/internal/models"
 )
 
@@ -13,26 +14,161 @@ func NewQueuePostgresRepository(db *sql.DB) *QueuePostgresRepository {
 	return &QueuePostgresRepository{db: db}
 }
 
-func (r *QueuePostgresRepository) GetByServicePoint(servicePointID int) []models.Queue {
+func formatTicketNumber(number int) string {
+	return fmt.Sprintf("A-%03d", number)
+}
 
-	rows, err := r.db.Query(`
-		SELECT id, name, service_point_id 
-		FROM queues 
-		WHERE service_point_id = $1
-	`, servicePointID)
-
+func (r *QueuePostgresRepository) Create(q models.Queue) (models.Queue, error) {
+	query := `INSERT INTO queues (name, service_point_id) VALUES ($1, $2) RETURNING id`
+	err := r.db.QueryRow(query, q.Name, q.ServicePointID).Scan(&q.ID)
 	if err != nil {
-		return nil
+		return q, err
+	}
+	return q, nil
+}
+
+func (r *QueuePostgresRepository) GetAll() ([]models.Queue, error) {
+	rows, err := r.db.Query(`SELECT id, name, service_point_id FROM queues ORDER BY id`)
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 
 	var queues []models.Queue
-
 	for rows.Next() {
 		var q models.Queue
-		rows.Scan(&q.ID, &q.Name, &q.ServicePointID)
+		if err := rows.Scan(&q.ID, &q.Name, &q.ServicePointID); err != nil {
+			return nil, err
+		}
 		queues = append(queues, q)
 	}
 
-	return queues
+	return queues, rows.Err()
+}
+
+func (r *QueuePostgresRepository) GetByServicePoint(servicePointID int) ([]models.Queue, error) {
+	rows, err := r.db.Query(`
+		SELECT id, name, service_point_id
+		FROM queues
+		WHERE service_point_id = $1
+		ORDER BY id
+	`, servicePointID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var queues []models.Queue
+	for rows.Next() {
+		var q models.Queue
+		if err := rows.Scan(&q.ID, &q.Name, &q.ServicePointID); err != nil {
+			return nil, err
+		}
+		queues = append(queues, q)
+	}
+
+	return queues, rows.Err()
+}
+
+func (r *QueuePostgresRepository) GetDisplay(queueID int) (models.QueueDisplay, error) {
+	display := models.QueueDisplay{
+		QueueID:        queueID,
+		WaitingTickets: []models.QueueDisplayTicket{},
+	}
+
+	if err := r.db.QueryRow(`SELECT id, name FROM queues WHERE id = $1`, queueID).
+		Scan(&display.QueueID, &display.QueueName); err != nil {
+		return display, err
+	}
+
+	var currentID, currentNumber int
+	var currentStatus string
+
+	err := r.db.QueryRow(`
+		SELECT id, number, status
+		FROM tickets
+		WHERE queue_id = $1 AND status IN ('called', 'in_progress')
+		ORDER BY id ASC
+		LIMIT 1
+	`, queueID).Scan(&currentID, &currentNumber, &currentStatus)
+
+	if err != nil && err != sql.ErrNoRows {
+		return display, err
+	}
+
+	if err == nil {
+		display.CurrentTicket = &models.QueueDisplayTicket{
+			ID:           currentID,
+			TicketNumber: formatTicketNumber(currentNumber),
+			Status:       currentStatus,
+		}
+	}
+
+	rows, err := r.db.Query(`
+		SELECT id, number, status
+		FROM tickets
+		WHERE queue_id = $1 AND status = 'waiting'
+		ORDER BY number ASC
+	`, queueID)
+	if err != nil {
+		return display, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, number int
+		var status string
+
+		if err := rows.Scan(&id, &number, &status); err != nil {
+			return display, err
+		}
+
+		display.WaitingTickets = append(display.WaitingTickets, models.QueueDisplayTicket{
+			ID:           id,
+			TicketNumber: formatTicketNumber(number),
+			Status:       status,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return display, err
+	}
+
+	if err := r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM tickets
+		WHERE queue_id = $1 AND status = 'completed'
+	`, queueID).Scan(&display.CompletedCount); err != nil {
+		return display, err
+	}
+
+	return display, nil
+}
+
+func (r *QueuePostgresRepository) GetStats(queueID int) (models.QueueStats, error) {
+	stats := models.QueueStats{QueueID: queueID}
+
+	query := `
+		SELECT
+			COUNT(*) AS total_tickets,
+			COUNT(*) FILTER (WHERE status = 'waiting') AS waiting_tickets,
+			COUNT(*) FILTER (WHERE status IN ('called', 'in_progress')) AS called_tickets,
+			COUNT(*) FILTER (WHERE status = 'completed') AS completed_tickets,
+			COUNT(*) FILTER (WHERE status = 'skipped') AS skipped_tickets
+		FROM tickets
+		WHERE queue_id = $1
+	`
+
+	err := r.db.QueryRow(query, queueID).Scan(
+		&stats.TotalTickets,
+		&stats.WaitingTickets,
+		&stats.CalledTickets,
+		&stats.CompletedTickets,
+		&stats.SkippedTickets,
+	)
+	if err != nil {
+		return stats, err
+	}
+
+	return stats, nil
 }

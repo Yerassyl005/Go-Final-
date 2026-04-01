@@ -13,33 +13,30 @@ func NewServicePointPostgresRepository(db *sql.DB) *ServicePointPostgresReposito
 	return &ServicePointPostgresRepository{db: db}
 }
 
-func (r *ServicePointPostgresRepository) Create(sp models.ServicePoint) models.ServicePoint {
-
-	query := `INSERT INTO service_points (name) VALUES ($1) RETURNING id`
-
-	err := r.db.QueryRow(query, sp.Name).Scan(&sp.ID)
+func (r *ServicePointPostgresRepository) Create(sp models.ServicePoint) (models.ServicePoint, error) {
+	query := `INSERT INTO service_points (name, description) VALUES ($1, $2) RETURNING id`
+	err := r.db.QueryRow(query, sp.Name, sp.Description).Scan(&sp.ID)
 	if err != nil {
-		return sp
+		return sp, err
 	}
-
-	return sp
+	return sp, nil
 }
 
-func (r *ServicePointPostgresRepository) GetAll() []models.ServicePoint {
-
-	rows, err := r.db.Query(`SELECT id, name FROM service_points`)
+func (r *ServicePointPostgresRepository) GetAll() ([]models.ServicePoint, error) {
+	rows, err := r.db.Query(`SELECT id, name, description FROM service_points ORDER BY id`)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 
 	var points []models.ServicePoint
-
 	for rows.Next() {
 		var sp models.ServicePoint
-		rows.Scan(&sp.ID, &sp.Name)
+		if err := rows.Scan(&sp.ID, &sp.Name, &sp.Description); err != nil {
+			return nil, err
+		}
 		points = append(points, sp)
 	}
 
-	return points
+	return points, rows.Err()
 }
