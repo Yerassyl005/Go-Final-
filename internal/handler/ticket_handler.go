@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
-
+	"smartqueue/internal/middleware"
 	"smartqueue/internal/service"
+
+	"github.com/gorilla/mux"
 )
 
 type TicketHandler struct {
@@ -19,42 +20,116 @@ func NewTicketHandler(s *service.TicketService) *TicketHandler {
 }
 
 func (h *TicketHandler) TakeTicket(w http.ResponseWriter, r *http.Request) {
-
 	type Request struct {
-	QueueID int `json:"queue_id"`
-	UserID  int `json:"user_id"`
-}
+		QueueID int `json:"queue_id"`
+	}
 
 	var req Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
 
-	json.NewDecoder(r.Body).Decode(&req)
+	claims, ok := r.Context().Value(middleware.UserContextKey).(*service.AuthClaims)
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
-	ticket := h.service.Create(req.QueueID)
+	ticket, err := h.service.Create(req.QueueID, claims.UserID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	json.NewEncoder(w).Encode(ticket)
+	writeJSON(w, http.StatusCreated, ticket)
 }
 
 func (h *TicketHandler) GetTickets(w http.ResponseWriter, r *http.Request) {
+	tickets, err := h.service.GetAll()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	tickets := h.service.GetAll()
-
-	json.NewEncoder(w).Encode(tickets)
+	writeJSON(w, http.StatusOK, tickets)
 }
 
 func (h *TicketHandler) CallNext(w http.ResponseWriter, r *http.Request) {
+	ticket, err := h.service.CallNext()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if ticket == nil {
+		writeJSONError(w, http.StatusNotFound, "no waiting tickets")
+		return
+	}
 
-	ticket := h.service.CallNext()
-
-	json.NewEncoder(w).Encode(ticket)
+	writeJSON(w, http.StatusOK, ticket)
 }
 
 func (h *TicketHandler) CompleteTicket(w http.ResponseWriter, r *http.Request) {
-
 	params := mux.Vars(r)
 
-	id, _ := strconv.Atoi(params["id"])
+	id, err := strconv.Atoi(params["id"])
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid ticket id")
+		return
+	}
 
-	ticket := h.service.Complete(id)
+	ticket, err := h.service.Complete(id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if ticket == nil {
+		writeJSONError(w, http.StatusNotFound, "ticket not found")
+		return
+	}
 
-	json.NewEncoder(w).Encode(ticket)
+	writeJSON(w, http.StatusOK, ticket)
+}
+
+func (h *TicketHandler) GetPosition(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	id, err := strconv.Atoi(params["id"])
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid ticket id")
+		return
+	}
+
+	position, err := h.service.GetPosition(id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ticket_id": id,
+		"position":  position,
+	})
+}
+
+func (h *TicketHandler) SkipTicket(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	id, err := strconv.Atoi(params["id"])
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid ticket id")
+		return
+	}
+
+	ticket, err := h.service.Skip(id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if ticket == nil {
+		writeJSONError(w, http.StatusNotFound, "ticket not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ticket)
 }

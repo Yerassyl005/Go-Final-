@@ -3,20 +3,23 @@ package service
 import "smartqueue/internal/models"
 
 type ServicePointRepository interface {
-	Create(models.ServicePoint) models.ServicePoint
-	GetAll() []models.ServicePoint
+	Create(models.ServicePoint) (models.ServicePoint, error)
+	GetAll() ([]models.ServicePoint, error)
 }
 
 type QueueRepository interface {
-	Create(models.Queue) models.Queue
-	GetAll() []models.Queue
-	GetByServicePoint(int) []models.Queue
+	Create(models.Queue) (models.Queue, error)
+	GetAll() ([]models.Queue, error)
+	GetByServicePoint(int) ([]models.Queue, error)
+	GetDisplay(int) (models.QueueDisplay, error)
+	GetStats(int) (models.QueueStats, error)
 }
 
 type TicketRepository interface {
-	Create(int, int) models.Ticket
-	GetAll() []models.Ticket
-	CallNext() *models.Ticket
-	Complete(int) *models.Ticket
-	GetPosition(int) int
+	Create(int, int) (models.Ticket, error)
+	GetAll() ([]models.Ticket, error)
+	CallNext() (*models.Ticket, error)
+	Complete(int) (*models.Ticket, error)
+	GetPosition(int) (int, error)
+	Skip(int) (*models.Ticket, error)
 }

@@ -1,5 +1,6 @@
-DROP TABLE event_logs;
-DROP TABLE tickets;
-DROP TABLE operators;
-DROP TABLE queues;
-DROP TABLE service_points;
+DROP TABLE IF EXISTS event_logs;
+DROP TABLE IF EXISTS tickets;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS operators;
+DROP TABLE IF EXISTS queues;
+DROP TABLE IF EXISTS service_points;

@@ -17,23 +17,28 @@ func NewServicePointHandler(s *service.ServicePointService) *ServicePointHandler
 }
 
 func (h *ServicePointHandler) Create(w http.ResponseWriter, r *http.Request) {
-
 	var sp models.ServicePoint
 
-	err := json.NewDecoder(r.Body).Decode(&sp)
-	if err != nil {
-		http.Error(w, err.Error(), 400)
+	if err := json.NewDecoder(r.Body).Decode(&sp); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	result := h.service.Create(sp)
+	result, err := h.service.Create(sp)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, http.StatusCreated, result)
 }
 
 func (h *ServicePointHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	points, err := h.service.GetAll()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	points := h.service.GetAll()
-
-	json.NewEncoder(w).Encode(points)
+	writeJSON(w, http.StatusOK, points)
 }
