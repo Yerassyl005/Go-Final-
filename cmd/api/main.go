@@ -34,14 +34,18 @@ func main() {
 	queueService := service.NewQueueService(queueRepo)
 	ticketService := service.NewTicketService(ticketRepo)
 	authService := service.NewAuthService(userRepo, jwtSecret)
+	qrService := service.NewQRService()
 
 	servicePointHandler := handler.NewServicePointHandler(servicePointService)
 	queueHandler := handler.NewQueueHandler(queueService)
 	ticketHandler := handler.NewTicketHandler(ticketService)
 	authHandler := handler.NewAuthHandler(authService)
+	qrHandler := handler.NewQRHandler(qrService)
 
 	router.HandleFunc("/auth/register", authHandler.Register).Methods("POST")
 	router.HandleFunc("/auth/login", authHandler.Login).Methods("POST")
+	router.HandleFunc("/qr", qrHandler.GenerateQR).Methods("GET")
+	router.HandleFunc("/tickets/{id}/qr", qrHandler.GetTicketQR).Methods("GET")
 
 	protected := router.PathPrefix("/").Subrouter()
 	protected.Use(middleware.AuthMiddleware(authService))
