@@ -83,14 +83,15 @@ func (r *QueuePostgresRepository) GetDisplay(queueID int) (models.QueueDisplay, 
 
 	var currentID, currentNumber int
 	var currentStatus string
+	var currentRecallCount int
 
 	err := r.db.QueryRow(`
-		SELECT id, number, status
+		SELECT id, number, status, recall_count
 		FROM tickets
-		WHERE queue_id = $1 AND status IN ('called', 'in_progress')
-		ORDER BY id ASC
+		WHERE queue_id = $1 AND status = $2
+		ORDER BY called_at DESC NULLS LAST, id DESC
 		LIMIT 1
-	`, queueID).Scan(&currentID, &currentNumber, &currentStatus)
+	`, queueID, models.TicketStatusCalled).Scan(&currentID, &currentNumber, &currentStatus, &currentRecallCount)
 
 	if err != nil && err != sql.ErrNoRows {
 		return display, err
@@ -101,6 +102,7 @@ func (r *QueuePostgresRepository) GetDisplay(queueID int) (models.QueueDisplay, 
 			ID:           currentID,
 			TicketNumber: formatTicketNumber(currentNumber),
 			Status:       currentStatus,
+			RecallCount:  currentRecallCount,
 		}
 	}
 
@@ -151,15 +153,22 @@ func (r *QueuePostgresRepository) GetStats(queueID int) (models.QueueStats, erro
 	query := `
 		SELECT
 			COUNT(*) AS total_tickets,
-			COUNT(*) FILTER (WHERE status = 'waiting') AS waiting_tickets,
-			COUNT(*) FILTER (WHERE status IN ('called', 'in_progress')) AS called_tickets,
-			COUNT(*) FILTER (WHERE status = 'completed') AS completed_tickets,
-			COUNT(*) FILTER (WHERE status = 'skipped') AS skipped_tickets
+			COUNT(*) FILTER (WHERE status = $2) AS waiting_tickets,
+			COUNT(*) FILTER (WHERE status = $3) AS called_tickets,
+			COUNT(*) FILTER (WHERE status = $4) AS completed_tickets,
+			COUNT(*) FILTER (WHERE status = $5) AS skipped_tickets
 		FROM tickets
 		WHERE queue_id = $1
 	`
 
-	err := r.db.QueryRow(query, queueID).Scan(
+	err := r.db.QueryRow(
+		query,
+		queueID,
+		models.TicketStatusWaiting,
+		models.TicketStatusCalled,
+		models.TicketStatusCompleted,
+		models.TicketStatusSkipped,
+	).Scan(
 		&stats.TotalTickets,
 		&stats.WaitingTickets,
 		&stats.CalledTickets,

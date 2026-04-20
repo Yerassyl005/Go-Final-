@@ -22,3 +22,13 @@ func isDuplicateKey(err error) bool {
 	var pgErr *pq.Error
 	return errors.As(err, &pgErr) && string(pgErr.Code) == "23505"
 }
+
+func isForeignKeyViolation(err error) bool {
+	var pgErr *pq.Error
+	return errors.As(err, &pgErr) && string(pgErr.Code) == "23503"
+}
+
+func hasConstraint(err error, constraint string) bool {
+	var pgErr *pq.Error
+	return errors.As(err, &pgErr) && pgErr.Constraint == constraint
+}

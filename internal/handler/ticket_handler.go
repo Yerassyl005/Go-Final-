@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -38,6 +39,14 @@ func (h *TicketHandler) TakeTicket(w http.ResponseWriter, r *http.Request) {
 
 	ticket, err := h.service.Create(req.QueueID, claims.UserID)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidQueueID) {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if isForeignKeyViolation(err) && hasConstraint(err, "tickets_queue_id_fkey") {
+			writeJSONError(w, http.StatusNotFound, "queue not found")
+			return
+		}
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -56,45 +65,64 @@ func (h *TicketHandler) GetTickets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TicketHandler) CallNext(w http.ResponseWriter, r *http.Request) {
-	ticket, err := h.service.CallNext()
+	queueID, err := getIntParam(r, "id")
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if ticket == nil {
-		writeJSONError(w, http.StatusNotFound, "no waiting tickets")
+		writeJSONError(w, http.StatusBadRequest, "invalid queue id")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, ticket)
+	ticket, err := h.service.CallNext(queueID)
+	if err != nil {
+		writeTicketActionError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message": "ticket called",
+		"ticket":  ticket,
+	})
 }
 
-func (h *TicketHandler) CompleteTicket(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
+func (h *TicketHandler) RecallCurrent(w http.ResponseWriter, r *http.Request) {
+	queueID, err := getIntParam(r, "id")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid queue id")
+		return
+	}
 
-	id, err := strconv.Atoi(params["id"])
+	ticket, err := h.service.RecallCurrent(queueID)
+	if err != nil {
+		writeTicketActionError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message": "ticket recalled",
+		"ticket":  ticket,
+	})
+}
+
+func (h *TicketHandler) CallSkipped(w http.ResponseWriter, r *http.Request) {
+	ticketID, err := getIntParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid ticket id")
 		return
 	}
 
-	ticket, err := h.service.Complete(id)
+	ticket, err := h.service.CallSkipped(ticketID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if ticket == nil {
-		writeJSONError(w, http.StatusNotFound, "ticket not found")
+		writeTicketActionError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, ticket)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message": "skipped ticket called again",
+		"ticket":  ticket,
+	})
 }
 
 func (h *TicketHandler) GetPosition(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-
-	id, err := strconv.Atoi(params["id"])
+	id, err := getIntParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid ticket id")
 		return
@@ -102,6 +130,10 @@ func (h *TicketHandler) GetPosition(w http.ResponseWriter, r *http.Request) {
 
 	position, err := h.service.GetPosition(id)
 	if err != nil {
+		if errors.Is(err, service.ErrTicketNotFound) {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		}
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -112,24 +144,60 @@ func (h *TicketHandler) GetPosition(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *TicketHandler) SkipTicket(w http.ResponseWriter, r *http.Request) {
+func (h *TicketHandler) SkipCurrent(w http.ResponseWriter, r *http.Request) {
+	queueID, err := getIntParam(r, "id")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid queue id")
+		return
+	}
+
+	ticket, err := h.service.SkipCurrent(queueID)
+	if err != nil {
+		writeTicketActionError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message": "ticket skipped",
+		"ticket":  ticket,
+	})
+}
+
+func (h *TicketHandler) CompleteCurrent(w http.ResponseWriter, r *http.Request) {
+	queueID, err := getIntParam(r, "id")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid queue id")
+		return
+	}
+
+	ticket, err := h.service.CompleteCurrent(queueID)
+	if err != nil {
+		writeTicketActionError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message": "ticket completed",
+		"ticket":  ticket,
+	})
+}
+
+func getIntParam(r *http.Request, name string) (int, error) {
 	params := mux.Vars(r)
+	return strconv.Atoi(params[name])
+}
 
-	id, err := strconv.Atoi(params["id"])
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid ticket id")
-		return
-	}
-
-	ticket, err := h.service.Skip(id)
-	if err != nil {
+func writeTicketActionError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrInvalidQueueID), errors.Is(err, service.ErrInvalidTicketID):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, service.ErrTicketNotFound):
+		writeJSONError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, service.ErrNoWaitingTickets), errors.Is(err, service.ErrNoActiveTicket), errors.Is(err, service.ErrActiveTicketExist), errors.Is(err, service.ErrTicketNotSkipped):
+		writeJSONError(w, http.StatusConflict, err.Error())
+	case isDuplicateKey(err) && hasConstraint(err, "tickets_one_active_per_queue_idx"):
+		writeJSONError(w, http.StatusConflict, service.ErrActiveTicketExist.Error())
+	default:
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
 	}
-	if ticket == nil {
-		writeJSONError(w, http.StatusNotFound, "ticket not found")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, ticket)
 }
