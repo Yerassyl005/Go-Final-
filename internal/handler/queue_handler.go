@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -29,6 +30,10 @@ func (h *QueueHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.Create(q)
 	if err != nil {
+		if isForeignKeyViolation(err) && hasConstraint(err, "queues_service_point_id_fkey") {
+			writeJSONError(w, http.StatusNotFound, "service point not found")
+			return
+		}
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -75,6 +80,10 @@ func (h *QueueHandler) GetDisplay(w http.ResponseWriter, r *http.Request) {
 
 	display, err := h.service.GetDisplay(id)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			writeJSONError(w, http.StatusNotFound, "queue not found")
+			return
+		}
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -93,6 +102,10 @@ func (h *QueueHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.service.GetStats(id)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			writeJSONError(w, http.StatusNotFound, "queue not found")
+			return
+		}
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -18,8 +18,12 @@ type QueueRepository interface {
 type TicketRepository interface {
 	Create(int, int) (models.Ticket, error)
 	GetAll() ([]models.Ticket, error)
-	CallNext() (*models.Ticket, error)
-	Complete(int) (*models.Ticket, error)
+	GetByID(int) (*models.Ticket, error)
+	GetCurrent(int) (*models.Ticket, error)
+	CallNext(int) (*models.Ticket, error)
+	CallSkipped(int) (*models.Ticket, error)
+	RecallCurrent(int) (*models.Ticket, error)
+	SkipCurrent(int) (*models.Ticket, error)
+	CompleteCurrent(int) (*models.Ticket, error)
 	GetPosition(int) (int, error)
-	Skip(int) (*models.Ticket, error)
 }

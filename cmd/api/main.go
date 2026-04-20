@@ -63,10 +63,12 @@ func main() {
 
 	protected.HandleFunc("/tickets", ticketHandler.TakeTicket).Methods("POST")
 	protected.HandleFunc("/tickets", ticketHandler.GetTickets).Methods("GET")
-	protected.HandleFunc("/tickets/call", ticketHandler.CallNext).Methods("POST")
-	protected.HandleFunc("/tickets/{id}/complete", ticketHandler.CompleteTicket).Methods("POST")
-	protected.HandleFunc("/tickets/{id}/skip", ticketHandler.SkipTicket).Methods("POST")
 	protected.HandleFunc("/tickets/{id}/position", ticketHandler.GetPosition).Methods("GET")
+	protected.HandleFunc("/tickets/{id}/call-skipped", ticketHandler.CallSkipped).Methods("POST")
+	protected.HandleFunc("/queues/{id}/tickets/call-next", ticketHandler.CallNext).Methods("POST")
+	protected.HandleFunc("/queues/{id}/tickets/recall-current", ticketHandler.RecallCurrent).Methods("POST")
+	protected.HandleFunc("/queues/{id}/tickets/skip-current", ticketHandler.SkipCurrent).Methods("POST")
+	protected.HandleFunc("/queues/{id}/tickets/complete-current", ticketHandler.CompleteCurrent).Methods("POST")
 
 	log.Println("Server running on port 8080")
 	if err := http.ListenAndServe(":8080", router); err != nil {

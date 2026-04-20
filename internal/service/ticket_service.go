@@ -1,6 +1,20 @@
 package service
 
-import "smartqueue/internal/models"
+import (
+	"database/sql"
+	"errors"
+	"smartqueue/internal/models"
+)
+
+var (
+	ErrInvalidQueueID    = errors.New("invalid queue id")
+	ErrInvalidTicketID   = errors.New("invalid ticket id")
+	ErrTicketNotFound    = errors.New("ticket not found")
+	ErrTicketNotSkipped  = errors.New("ticket is not in skipped status")
+	ErrNoWaitingTickets  = errors.New("no waiting tickets in this queue")
+	ErrNoActiveTicket    = errors.New("no active ticket in this queue")
+	ErrActiveTicketExist = errors.New("another ticket is already active in this queue")
+)
 
 type TicketService struct {
 	repo TicketRepository
@@ -11,6 +25,10 @@ func NewTicketService(r TicketRepository) *TicketService {
 }
 
 func (s *TicketService) Create(queueID int, userID int) (models.Ticket, error) {
+	if queueID <= 0 {
+		return models.Ticket{}, ErrInvalidQueueID
+	}
+
 	return s.repo.Create(queueID, userID)
 }
 
@@ -18,18 +36,131 @@ func (s *TicketService) GetAll() ([]models.Ticket, error) {
 	return s.repo.GetAll()
 }
 
-func (s *TicketService) CallNext() (*models.Ticket, error) {
-	return s.repo.CallNext()
+func (s *TicketService) CallNext(queueID int) (*models.Ticket, error) {
+	if queueID <= 0 {
+		return nil, ErrInvalidQueueID
+	}
+
+	current, err := s.repo.GetCurrent(queueID)
+	if err != nil {
+		return nil, err
+	}
+	if current != nil {
+		return nil, ErrActiveTicketExist
+	}
+
+	ticket, err := s.repo.CallNext(queueID)
+	if err != nil {
+		return nil, err
+	}
+	if ticket == nil {
+		return nil, ErrNoWaitingTickets
+	}
+
+	return ticket, nil
 }
 
-func (s *TicketService) Complete(id int) (*models.Ticket, error) {
-	return s.repo.Complete(id)
+func (s *TicketService) RecallCurrent(queueID int) (*models.Ticket, error) {
+	if queueID <= 0 {
+		return nil, ErrInvalidQueueID
+	}
+
+	ticket, err := s.repo.RecallCurrent(queueID)
+	if err != nil {
+		return nil, err
+	}
+	if ticket == nil {
+		return nil, ErrNoActiveTicket
+	}
+
+	return ticket, nil
+}
+
+func (s *TicketService) CallSkipped(ticketID int) (*models.Ticket, error) {
+	if ticketID <= 0 {
+		return nil, ErrInvalidTicketID
+	}
+
+	ticket, err := s.repo.GetByID(ticketID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrTicketNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if ticket == nil {
+		return nil, ErrTicketNotFound
+	}
+	if ticket.Status != models.TicketStatusSkipped {
+		return nil, ErrTicketNotSkipped
+	}
+
+	current, err := s.repo.GetCurrent(ticket.QueueID)
+	if err != nil {
+		return nil, err
+	}
+	if current != nil {
+		return nil, ErrActiveTicketExist
+	}
+
+	ticket, err = s.repo.CallSkipped(ticketID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrTicketNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if ticket == nil {
+		return nil, ErrTicketNotFound
+	}
+
+	return ticket, nil
+}
+
+func (s *TicketService) SkipCurrent(queueID int) (*models.Ticket, error) {
+	if queueID <= 0 {
+		return nil, ErrInvalidQueueID
+	}
+
+	ticket, err := s.repo.SkipCurrent(queueID)
+	if err != nil {
+		return nil, err
+	}
+	if ticket == nil {
+		return nil, ErrNoActiveTicket
+	}
+
+	return ticket, nil
+}
+
+func (s *TicketService) CompleteCurrent(queueID int) (*models.Ticket, error) {
+	if queueID <= 0 {
+		return nil, ErrInvalidQueueID
+	}
+
+	ticket, err := s.repo.CompleteCurrent(queueID)
+	if err != nil {
+		return nil, err
+	}
+	if ticket == nil {
+		return nil, ErrNoActiveTicket
+	}
+
+	return ticket, nil
 }
 
 func (s *TicketService) GetPosition(id int) (int, error) {
-	return s.repo.GetPosition(id)
-}
+	if id <= 0 {
+		return 0, ErrInvalidTicketID
+	}
 
-func (s *TicketService) Skip(id int) (*models.Ticket, error) {
-	return s.repo.Skip(id)
+	position, err := s.repo.GetPosition(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrTicketNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	return position, nil
 }
