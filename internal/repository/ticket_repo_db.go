@@ -24,10 +24,11 @@ func scanTicket(row ticketScanner, ticket *models.Ticket) error {
 		&ticket.Number,
 		&ticket.Status,
 		&ticket.RecallCount,
+		&ticket.IsPriority,
 	)
 }
 
-func (r *TicketPostgresRepository) Create(queueID int, userID int) (models.Ticket, error) {
+func (r *TicketPostgresRepository) Create(queueID int, userID int, isPriority bool) (models.Ticket, error) {
 	var number int
 
 	err := r.db.QueryRow(`
@@ -41,10 +42,10 @@ func (r *TicketPostgresRepository) Create(queueID int, userID int) (models.Ticke
 
 	var ticket models.Ticket
 	err = r.db.QueryRow(`
-		INSERT INTO tickets (queue_id, user_id, number, status)
-		VALUES ($1, $2, $3, 'waiting')
+		INSERT INTO tickets (queue_id, user_id, number, status, is_priority)
+		VALUES ($1, $2, $3, 'waiting', $4)
 		RETURNING id
-	`, queueID, userID, number).Scan(&ticket.ID)
+	`, queueID, userID, number, isPriority).Scan(&ticket.ID)
 	if err != nil {
 		return models.Ticket{}, err
 	}
@@ -52,13 +53,14 @@ func (r *TicketPostgresRepository) Create(queueID int, userID int) (models.Ticke
 	ticket.QueueID = queueID
 	ticket.Number = number
 	ticket.Status = models.TicketStatusWaiting
+	ticket.IsPriority = isPriority
 
 	return ticket, nil
 }
 
 func (r *TicketPostgresRepository) GetAll() ([]models.Ticket, error) {
 	rows, err := r.db.Query(`
-		SELECT id, queue_id, number, status, recall_count
+		SELECT id, queue_id, number, status, recall_count, is_priority
 		FROM tickets
 		ORDER BY queue_id, number
 	`)
@@ -70,7 +72,7 @@ func (r *TicketPostgresRepository) GetAll() ([]models.Ticket, error) {
 	var tickets []models.Ticket
 	for rows.Next() {
 		var t models.Ticket
-		if err := rows.Scan(&t.ID, &t.QueueID, &t.Number, &t.Status, &t.RecallCount); err != nil {
+		if err := rows.Scan(&t.ID, &t.QueueID, &t.Number, &t.Status, &t.RecallCount, &t.IsPriority); err != nil {
 			return nil, err
 		}
 		tickets = append(tickets, t)
@@ -83,7 +85,7 @@ func (r *TicketPostgresRepository) GetByID(ticketID int) (*models.Ticket, error)
 	var ticket models.Ticket
 
 	err := scanTicket(r.db.QueryRow(`
-		SELECT id, queue_id, number, status, recall_count
+		SELECT id, queue_id, number, status, recall_count, is_priority
 		FROM tickets
 		WHERE id = $1
 	`, ticketID), &ticket)
@@ -98,7 +100,7 @@ func (r *TicketPostgresRepository) GetCurrent(queueID int) (*models.Ticket, erro
 	var ticket models.Ticket
 
 	row := r.db.QueryRow(`
-		SELECT id, queue_id, number, status, recall_count
+		SELECT id, queue_id, number, status, recall_count, is_priority
 		FROM tickets
 		WHERE queue_id = $1 AND status = $2
 		ORDER BY called_at DESC NULLS LAST, id DESC
@@ -124,7 +126,7 @@ func (r *TicketPostgresRepository) CallSkipped(ticketID int) (*models.Ticket, er
 		UPDATE tickets
 		SET status = $2, called_at = NOW()
 		WHERE id = $1 AND status = $3
-		RETURNING id, queue_id, number, status, recall_count
+		RETURNING id, queue_id, number, status, recall_count, is_priority
 	`, ticketID, models.TicketStatusCalled, models.TicketStatusSkipped), &ticket)
 	if err != nil {
 		return nil, err
@@ -136,6 +138,8 @@ func (r *TicketPostgresRepository) CallSkipped(ticketID int) (*models.Ticket, er
 func (r *TicketPostgresRepository) CallNext(queueID int) (*models.Ticket, error) {
 	var ticket models.Ticket
 
+	// Priority tickets (is_priority DESC) are always served before regular ones.
+	// Within the same priority tier, FIFO ordering applies (number ASC).
 	err := scanTicket(r.db.QueryRow(`
 		UPDATE tickets
 		SET status = $2, called_at = NOW()
@@ -143,10 +147,10 @@ func (r *TicketPostgresRepository) CallNext(queueID int) (*models.Ticket, error)
 			SELECT id
 			FROM tickets
 			WHERE queue_id = $1 AND status = $3
-			ORDER BY number ASC
+			ORDER BY is_priority DESC, number ASC
 			LIMIT 1
 		)
-		RETURNING id, queue_id, number, status, recall_count
+		RETURNING id, queue_id, number, status, recall_count, is_priority
 	`, queueID, models.TicketStatusCalled, models.TicketStatusWaiting), &ticket)
 
 	if err == sql.ErrNoRows {
@@ -172,7 +176,7 @@ func (r *TicketPostgresRepository) RecallCurrent(queueID int) (*models.Ticket, e
 			ORDER BY called_at DESC NULLS LAST, id DESC
 			LIMIT 1
 		)
-		RETURNING id, queue_id, number, status, recall_count
+		RETURNING id, queue_id, number, status, recall_count, is_priority
 	`, queueID, models.TicketStatusCalled), &ticket)
 
 	if err == sql.ErrNoRows {
@@ -198,7 +202,7 @@ func (r *TicketPostgresRepository) SkipCurrent(queueID int) (*models.Ticket, err
 			ORDER BY called_at DESC NULLS LAST, id DESC
 			LIMIT 1
 		)
-		RETURNING id, queue_id, number, status, recall_count
+		RETURNING id, queue_id, number, status, recall_count, is_priority
 	`, queueID, models.TicketStatusSkipped, models.TicketStatusCalled), &ticket)
 
 	if err == sql.ErrNoRows {
@@ -224,7 +228,7 @@ func (r *TicketPostgresRepository) CompleteCurrent(queueID int) (*models.Ticket,
 			ORDER BY called_at DESC NULLS LAST, id DESC
 			LIMIT 1
 		)
-		RETURNING id, queue_id, number, status, recall_count
+		RETURNING id, queue_id, number, status, recall_count, is_priority
 	`, queueID, models.TicketStatusCompleted, models.TicketStatusCalled), &ticket)
 
 	if err == sql.ErrNoRows {
@@ -240,12 +244,13 @@ func (r *TicketPostgresRepository) CompleteCurrent(queueID int) (*models.Ticket,
 func (r *TicketPostgresRepository) GetPosition(ticketID int) (int, error) {
 	var queueID, number int
 	var status string
+	var isPriority bool
 
 	err := r.db.QueryRow(`
-		SELECT queue_id, number, status
+		SELECT queue_id, number, status, is_priority
 		FROM tickets
 		WHERE id = $1
-	`, ticketID).Scan(&queueID, &number, &status)
+	`, ticketID).Scan(&queueID, &number, &status, &isPriority)
 	if err != nil {
 		return -1, err
 	}
@@ -255,13 +260,32 @@ func (r *TicketPostgresRepository) GetPosition(ticketID int) (int, error) {
 	}
 
 	var ahead int
-	err = r.db.QueryRow(`
-		SELECT COUNT(*)
-		FROM tickets
-		WHERE queue_id = $1
-		AND number < $2
-		AND status IN ($3, $4)
-	`, queueID, number, models.TicketStatusWaiting, models.TicketStatusCalled).Scan(&ahead)
+	if isPriority {
+		// For priority ticket: only other priority tickets with a lower number are ahead,
+		// plus any currently called ticket.
+		err = r.db.QueryRow(`
+			SELECT COUNT(*)
+			FROM tickets
+			WHERE queue_id = $1
+			AND (
+				status = $2
+				OR (is_priority = true AND status = $3 AND number < $4)
+			)
+		`, queueID, models.TicketStatusCalled, models.TicketStatusWaiting, number).Scan(&ahead)
+	} else {
+		// For regular ticket: all priority waiting tickets are ahead,
+		// plus regular tickets with a lower number, plus any currently called ticket.
+		err = r.db.QueryRow(`
+			SELECT COUNT(*)
+			FROM tickets
+			WHERE queue_id = $1
+			AND (
+				status = $2
+				OR (is_priority = true AND status = $3)
+				OR (is_priority = false AND status = $3 AND number < $4)
+			)
+		`, queueID, models.TicketStatusCalled, models.TicketStatusWaiting, number).Scan(&ahead)
+	}
 	if err != nil {
 		return -1, err
 	}

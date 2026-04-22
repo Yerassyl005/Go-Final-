@@ -84,14 +84,15 @@ func (r *QueuePostgresRepository) GetDisplay(queueID int) (models.QueueDisplay, 
 	var currentID, currentNumber int
 	var currentStatus string
 	var currentRecallCount int
+	var currentIsPriority bool
 
 	err := r.db.QueryRow(`
-		SELECT id, number, status, recall_count
+		SELECT id, number, status, recall_count, is_priority
 		FROM tickets
 		WHERE queue_id = $1 AND status = $2
 		ORDER BY called_at DESC NULLS LAST, id DESC
 		LIMIT 1
-	`, queueID, models.TicketStatusCalled).Scan(&currentID, &currentNumber, &currentStatus, &currentRecallCount)
+	`, queueID, models.TicketStatusCalled).Scan(&currentID, &currentNumber, &currentStatus, &currentRecallCount, &currentIsPriority)
 
 	if err != nil && err != sql.ErrNoRows {
 		return display, err
@@ -103,14 +104,15 @@ func (r *QueuePostgresRepository) GetDisplay(queueID int) (models.QueueDisplay, 
 			TicketNumber: formatTicketNumber(currentNumber),
 			Status:       currentStatus,
 			RecallCount:  currentRecallCount,
+			IsPriority:   currentIsPriority,
 		}
 	}
 
 	rows, err := r.db.Query(`
-		SELECT id, number, status
+		SELECT id, number, status, is_priority
 		FROM tickets
 		WHERE queue_id = $1 AND status = 'waiting'
-		ORDER BY number ASC
+		ORDER BY is_priority DESC, number ASC
 	`, queueID)
 	if err != nil {
 		return display, err
@@ -120,8 +122,9 @@ func (r *QueuePostgresRepository) GetDisplay(queueID int) (models.QueueDisplay, 
 	for rows.Next() {
 		var id, number int
 		var status string
+		var isPriority bool
 
-		if err := rows.Scan(&id, &number, &status); err != nil {
+		if err := rows.Scan(&id, &number, &status, &isPriority); err != nil {
 			return display, err
 		}
 
@@ -129,6 +132,7 @@ func (r *QueuePostgresRepository) GetDisplay(queueID int) (models.QueueDisplay, 
 			ID:           id,
 			TicketNumber: formatTicketNumber(number),
 			Status:       status,
+			IsPriority:   isPriority,
 		})
 	}
 

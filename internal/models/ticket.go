@@ -6,6 +6,7 @@ type Ticket struct {
 	Number      int    `json:"number"`
 	Status      string `json:"status"`
 	RecallCount int    `json:"recall_count"`
+	IsPriority  bool   `json:"is_priority"`
 }
 
 const (

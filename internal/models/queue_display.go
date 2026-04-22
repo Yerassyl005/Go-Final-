@@ -5,6 +5,7 @@ type QueueDisplayTicket struct {
 	TicketNumber string `json:"ticket_number"`
 	Status       string `json:"status"`
 	RecallCount  int    `json:"recall_count,omitempty"`
+	IsPriority   bool   `json:"is_priority"`
 }
 
 type QueueDisplay struct {

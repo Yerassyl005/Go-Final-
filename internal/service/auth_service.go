@@ -42,17 +42,31 @@ func normalizePhone(phone string) string {
 	return b.String()
 }
 
-func (s *AuthService) Register(firstName, lastName, phone, password string) (*models.User, string, error) {
+var validPriorityCategories = map[string]bool{
+	models.PriorityCategoryNone:     true,
+	models.PriorityCategoryPregnant: true,
+	models.PriorityCategoryElderly:  true,
+	models.PriorityCategoryDisabled: true,
+}
+
+func (s *AuthService) Register(firstName, lastName, phone, password, priorityCategory string) (*models.User, string, error) {
 	firstName = strings.TrimSpace(firstName)
 	lastName = strings.TrimSpace(lastName)
 	phone = normalizePhone(phone)
 	password = strings.TrimSpace(password)
+
+	if priorityCategory == "" {
+		priorityCategory = models.PriorityCategoryNone
+	}
 
 	if firstName == "" || lastName == "" || phone == "" || password == "" {
 		return nil, "", errors.New("all fields are required")
 	}
 	if len(password) < 6 {
 		return nil, "", errors.New("password must be at least 6 characters")
+	}
+	if !validPriorityCategories[priorityCategory] {
+		return nil, "", fmt.Errorf("invalid priority_category: must be one of none, pregnant, elderly, disabled")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -61,10 +75,11 @@ func (s *AuthService) Register(firstName, lastName, phone, password string) (*mo
 	}
 
 	user := &models.User{
-		FirstName:    firstName,
-		LastName:     lastName,
-		Phone:        phone,
-		PasswordHash: string(hash),
+		FirstName:        firstName,
+		LastName:         lastName,
+		Phone:            phone,
+		PasswordHash:     string(hash),
+		PriorityCategory: priorityCategory,
 	}
 
 	if err := s.users.Create(user); err != nil {

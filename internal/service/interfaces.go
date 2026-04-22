@@ -16,7 +16,7 @@ type QueueRepository interface {
 }
 
 type TicketRepository interface {
-	Create(int, int) (models.Ticket, error)
+	Create(int, int, bool) (models.Ticket, error)
 	GetAll() ([]models.Ticket, error)
 	GetByID(int) (*models.Ticket, error)
 	GetCurrent(int) (*models.Ticket, error)
@@ -26,4 +26,8 @@ type TicketRepository interface {
 	SkipCurrent(int) (*models.Ticket, error)
 	CompleteCurrent(int) (*models.Ticket, error)
 	GetPosition(int) (int, error)
+}
+
+type UserReader interface {
+	GetByID(int) (*models.User, error)
 }

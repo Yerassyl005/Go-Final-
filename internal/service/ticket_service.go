@@ -17,11 +17,12 @@ var (
 )
 
 type TicketService struct {
-	repo TicketRepository
+	repo     TicketRepository
+	userRepo UserReader
 }
 
-func NewTicketService(r TicketRepository) *TicketService {
-	return &TicketService{repo: r}
+func NewTicketService(r TicketRepository, userRepo UserReader) *TicketService {
+	return &TicketService{repo: r, userRepo: userRepo}
 }
 
 func (s *TicketService) Create(queueID int, userID int) (models.Ticket, error) {
@@ -29,7 +30,13 @@ func (s *TicketService) Create(queueID int, userID int) (models.Ticket, error) {
 		return models.Ticket{}, ErrInvalidQueueID
 	}
 
-	return s.repo.Create(queueID, userID)
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return models.Ticket{}, err
+	}
+
+	isPriority := user.PriorityCategory != models.PriorityCategoryNone
+	return s.repo.Create(queueID, userID, isPriority)
 }
 
 func (s *TicketService) GetAll() ([]models.Ticket, error) {

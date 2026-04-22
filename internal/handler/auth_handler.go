@@ -18,10 +18,11 @@ func NewAuthHandler(auth *service.AuthService) *AuthHandler {
 }
 
 type RegisterRequest struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Phone     string `json:"phone"`
-	Password  string `json:"password"`
+	FirstName        string `json:"first_name"`
+	LastName         string `json:"last_name"`
+	Phone            string `json:"phone"`
+	Password         string `json:"password"`
+	PriorityCategory string `json:"priority_category"`
 }
 
 type LoginRequest struct {
@@ -41,7 +42,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, token, err := h.auth.Register(req.FirstName, req.LastName, req.Phone, req.Password)
+	user, token, err := h.auth.Register(req.FirstName, req.LastName, req.Phone, req.Password, req.PriorityCategory)
 	if err != nil {
 		if isDuplicateKey(err) {
 			writeJSONError(w, http.StatusConflict, "user with this phone already exists")
