@@ -14,20 +14,40 @@ var (
 	ErrNoWaitingTickets  = errors.New("no waiting tickets in this queue")
 	ErrNoActiveTicket    = errors.New("no active ticket in this queue")
 	ErrActiveTicketExist = errors.New("another ticket is already active in this queue")
+
+	ErrQueueClosed     = errors.New("queue is closed")
+	ErrTicketNotCalled = errors.New("ticket is not called")
 )
 
 type TicketService struct {
-	repo     TicketRepository
-	userRepo UserReader
+	repo      TicketRepository
+	userRepo  UserReader
+	queueRepo QueueReader // 👈 ВАЖНО: QueueReader, не QueueRepository
 }
 
-func NewTicketService(r TicketRepository, userRepo UserReader) *TicketService {
-	return &TicketService{repo: r, userRepo: userRepo}
+func NewTicketService(r TicketRepository, userRepo UserReader, queueRepo QueueReader) *TicketService {
+	return &TicketService{
+		repo:      r,
+		userRepo:  userRepo,
+		queueRepo: queueRepo,
+	}
 }
 
 func (s *TicketService) Create(queueID int, userID int) (models.Ticket, error) {
 	if queueID <= 0 {
 		return models.Ticket{}, ErrInvalidQueueID
+	}
+
+	// 🔒 проверка очереди
+	queue, err := s.queueRepo.GetByID(queueID)
+	if err != nil {
+		return models.Ticket{}, err
+	}
+	if queue == nil {
+		return models.Ticket{}, ErrInvalidQueueID
+	}
+	if !queue.IsOpen {
+		return models.Ticket{}, ErrQueueClosed
 	}
 
 	user, err := s.userRepo.GetByID(userID)
@@ -143,6 +163,17 @@ func (s *TicketService) SkipCurrent(queueID int) (*models.Ticket, error) {
 func (s *TicketService) CompleteCurrent(queueID int) (*models.Ticket, error) {
 	if queueID <= 0 {
 		return nil, ErrInvalidQueueID
+	}
+
+	current, err := s.repo.GetCurrent(queueID)
+	if err != nil {
+		return nil, err
+	}
+	if current == nil {
+		return nil, ErrNoActiveTicket
+	}
+	if current.Status != models.TicketStatusCalled {
+		return nil, ErrTicketNotCalled
 	}
 
 	ticket, err := s.repo.CompleteCurrent(queueID)

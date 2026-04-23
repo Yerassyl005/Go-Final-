@@ -65,6 +65,7 @@ func (h *TicketHandler) GetTickets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TicketHandler) CallNext(w http.ResponseWriter, r *http.Request) {
+	
 	queueID, err := getIntParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid queue id")

@@ -32,7 +32,7 @@ func main() {
 
 	servicePointService := service.NewServicePointService(servicePointRepo)
 	queueService := service.NewQueueService(queueRepo)
-	ticketService := service.NewTicketService(ticketRepo, userRepo)
+	ticketService := service.NewTicketService(ticketRepo, userRepo, queueRepo)
 	authService := service.NewAuthService(userRepo, jwtSecret)
 	qrService := service.NewQRService()
 

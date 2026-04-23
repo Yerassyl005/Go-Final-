@@ -28,7 +28,7 @@ func (r *QueuePostgresRepository) Create(q models.Queue) (models.Queue, error) {
 }
 
 func (r *QueuePostgresRepository) GetAll() ([]models.Queue, error) {
-	rows, err := r.db.Query(`SELECT id, name, service_point_id FROM queues ORDER BY id`)
+	rows, err := r.db.Query(`SELECT id, name, service_point_id, is_open FROM queues ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ func (r *QueuePostgresRepository) GetAll() ([]models.Queue, error) {
 	var queues []models.Queue
 	for rows.Next() {
 		var q models.Queue
-		if err := rows.Scan(&q.ID, &q.Name, &q.ServicePointID); err != nil {
+		if err := rows.Scan(&q.ID, &q.Name, &q.ServicePointID, &q.IsOpen); err != nil {
 			return nil, err
 		}
 		queues = append(queues, q)
@@ -48,7 +48,7 @@ func (r *QueuePostgresRepository) GetAll() ([]models.Queue, error) {
 
 func (r *QueuePostgresRepository) GetByServicePoint(servicePointID int) ([]models.Queue, error) {
 	rows, err := r.db.Query(`
-		SELECT id, name, service_point_id
+		SELECT id, name, service_point_id, is_open
 		FROM queues
 		WHERE service_point_id = $1
 		ORDER BY id
@@ -61,7 +61,7 @@ func (r *QueuePostgresRepository) GetByServicePoint(servicePointID int) ([]model
 	var queues []models.Queue
 	for rows.Next() {
 		var q models.Queue
-		if err := rows.Scan(&q.ID, &q.Name, &q.ServicePointID); err != nil {
+		if err := rows.Scan(&q.ID, &q.Name, &q.ServicePointID, &q.IsOpen); err != nil {
 			return nil, err
 		}
 		queues = append(queues, q)
@@ -184,4 +184,20 @@ func (r *QueuePostgresRepository) GetStats(queueID int) (models.QueueStats, erro
 	}
 
 	return stats, nil
+}
+
+func (r *QueuePostgresRepository) GetByID(id int) (*models.Queue, error) {
+	var q models.Queue
+
+	err := r.db.QueryRow(`
+		SELECT id, name, service_point_id, is_open
+		FROM queues
+		WHERE id = $1
+	`, id).Scan(&q.ID, &q.Name, &q.ServicePointID, &q.IsOpen)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &q, nil
 }

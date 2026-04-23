@@ -17,4 +17,5 @@ type User struct {
 	PriorityCategory string    `json:"priority_category"`
 	PasswordHash     string    `json:"-"`
 	CreatedAt        time.Time `json:"created_at"`
+	ServicePointID int `json:"service_point_id"`
 }

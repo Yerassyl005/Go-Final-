@@ -15,10 +15,17 @@ type QueueRepository interface {
 	GetStats(int) (models.QueueStats, error)
 }
 
+type QueueReader interface {
+	GetByID(int) (*models.Queue, error)
+}
+
+
 type TicketRepository interface {
 	Create(int, int, bool) (models.Ticket, error)
 	GetAll() ([]models.Ticket, error)
-	GetByID(int) (*models.Ticket, error)
+
+	GetByID(int) (*models.Ticket, error) // ✅ ВОТ ТУТ ГЛАВНОЕ ИСПРАВЛЕНИЕ
+
 	GetCurrent(int) (*models.Ticket, error)
 	CallNext(int) (*models.Ticket, error)
 	CallSkipped(int) (*models.Ticket, error)
@@ -27,6 +34,7 @@ type TicketRepository interface {
 	CompleteCurrent(int) (*models.Ticket, error)
 	GetPosition(int) (int, error)
 }
+
 
 type UserReader interface {
 	GetByID(int) (*models.User, error)
