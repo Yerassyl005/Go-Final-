@@ -42,11 +42,19 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService)
 	qrHandler := handler.NewQRHandler(qrService)
 
+	// ── Swagger UI (без авторизации) ───────────────────────────────
+	router.PathPrefix("/swagger/").Handler(handler.SwaggerUIHandler())
+	router.HandleFunc("/swagger", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger/", http.StatusMovedPermanently)
+	})
+
+	// ── Публичные маршруты ─────────────────────────────────────────
 	router.HandleFunc("/auth/register", authHandler.Register).Methods("POST")
 	router.HandleFunc("/auth/login", authHandler.Login).Methods("POST")
 	router.HandleFunc("/qr", qrHandler.GenerateQR).Methods("GET")
 	router.HandleFunc("/tickets/{id}/qr", qrHandler.GetTicketQR).Methods("GET")
 
+	// ── Защищённые маршруты ────────────────────────────────────────
 	protected := router.PathPrefix("/").Subrouter()
 	protected.Use(middleware.AuthMiddleware(authService))
 
@@ -71,6 +79,7 @@ func main() {
 	protected.HandleFunc("/queues/{id}/tickets/complete-current", ticketHandler.CompleteCurrent).Methods("POST")
 
 	log.Println("Server running on port 8080")
+	log.Println("Swagger UI: http://localhost:8080/swagger/")
 	if err := http.ListenAndServe(":8080", router); err != nil {
 		log.Fatal(err)
 	}
