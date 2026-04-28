@@ -1,0 +1,2 @@
+ALTER TABLE queues
+DROP COLUMN IF EXISTS is_open;

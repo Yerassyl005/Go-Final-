@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -34,6 +35,7 @@ func (h *QueueHandler) Create(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusNotFound, "service point not found")
 			return
 		}
+		log.Printf("queue create failed: name=%q service_point_id=%d err=%v", q.Name, q.ServicePointID, err)
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -44,6 +46,7 @@ func (h *QueueHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *QueueHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	queues, err := h.service.GetAll()
 	if err != nil {
+		log.Printf("queue get all failed: err=%v", err)
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -62,6 +65,7 @@ func (h *QueueHandler) GetByServicePoint(w http.ResponseWriter, r *http.Request)
 
 	queues, err := h.service.GetByServicePoint(id)
 	if err != nil {
+		log.Printf("queue get by service point failed: service_point_id=%d err=%v", id, err)
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -84,6 +88,7 @@ func (h *QueueHandler) GetDisplay(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusNotFound, "queue not found")
 			return
 		}
+		log.Printf("queue display failed: queue_id=%d err=%v", id, err)
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -106,6 +111,7 @@ func (h *QueueHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusNotFound, "queue not found")
 			return
 		}
+		log.Printf("queue stats failed: queue_id=%d err=%v", id, err)
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

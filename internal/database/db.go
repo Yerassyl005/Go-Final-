@@ -12,9 +12,8 @@ import (
 
 func ConnectDB() *sql.DB {
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Printf("Error loading .env file: %v", err)
 	}
 
 	connStr := fmt.Sprintf(

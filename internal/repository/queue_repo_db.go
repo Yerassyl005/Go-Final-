@@ -19,8 +19,8 @@ func formatTicketNumber(number int) string {
 }
 
 func (r *QueuePostgresRepository) Create(q models.Queue) (models.Queue, error) {
-	query := `INSERT INTO queues (name, service_point_id) VALUES ($1, $2) RETURNING id`
-	err := r.db.QueryRow(query, q.Name, q.ServicePointID).Scan(&q.ID)
+	query := `INSERT INTO queues (name, service_point_id) VALUES ($1, $2) RETURNING id, is_open`
+	err := r.db.QueryRow(query, q.Name, q.ServicePointID).Scan(&q.ID, &q.IsOpen)
 	if err != nil {
 		return q, err
 	}

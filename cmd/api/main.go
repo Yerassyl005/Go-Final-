@@ -24,6 +24,7 @@ func main() {
 	}
 
 	router := mux.NewRouter()
+	router.Use(middleware.LoggingMiddleware)
 
 	servicePointRepo := repository.NewServicePointPostgresRepository(db)
 	queueRepo := repository.NewQueuePostgresRepository(db)
